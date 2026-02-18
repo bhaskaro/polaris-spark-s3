@@ -1,0 +1,103 @@
+version: "3.9"
+
+networks:
+  lakehouse_net:
+    driver: bridge
+
+services:
+
+  # ---------------------------
+  # S3 Storage (RustFS)
+  # ---------------------------
+  rustfs:
+    image: rustfs/rustfs:1.0.0-alpha.81
+    container_name: rustfs
+    networks:
+      - lakehouse_net
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      RUSTFS_ACCESS_KEY: polaris_root
+      RUSTFS_SECRET_KEY: polaris_pass
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+
+  # ---------------------------
+  # Polaris Catalog
+  # ---------------------------
+  polaris:
+    image: apache/polaris:latest
+    container_name: polaris
+    networks:
+      - lakehouse_net
+    depends_on:
+      - rustfs
+    ports:
+      - "8181:8181"
+      - "8182:8182"
+    environment:
+      AWS_REGION: us-west-2
+      AWS_ACCESS_KEY_ID: polaris_root
+      AWS_SECRET_ACCESS_KEY: polaris_pass
+      POLARIS_BOOTSTRAP_CREDENTIALS: POLARIS,root,s3cr3t
+      polaris.realm-context.realms: POLARIS
+      quarkus.otel.sdk.disabled: "true"
+
+  # ---------------------------
+  # Spark Master
+  # ---------------------------
+  spark-master:
+    image: apache/spark:3.5.1
+    container_name: spark-master
+    networks:
+      - lakehouse_net
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    environment:
+      SPARK_MODE: master
+      HOME: /tmp
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+      --host spark-master
+      --port 7077
+      --webui-port 8080
+
+  # ---------------------------
+  # Spark Worker 1
+  # ---------------------------
+  spark-worker-1:
+    image: apache/spark:3.5.1
+    container_name: spark-worker-1
+    networks:
+      - lakehouse_net
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      HOME: /tmp
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077
+
+  # ---------------------------
+  # Spark Worker 2
+  # ---------------------------
+  spark-worker-2:
+    image: apache/spark:3.5.1
+    container_name: spark-worker-2
+    networks:
+      - lakehouse_net
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      HOME: /tmp
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077
