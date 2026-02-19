@@ -2,65 +2,27 @@
 
 A fully containerized **distributed Spark 3.5.1 cluster (Master + Workers)** integrated with:
 
-* 🧊 **Apache Iceberg (REST Catalog mode)**
-* 🏛 **Apache Polaris (Catalog + Governance)**
-* 🗄 **RustFS (S3-compatible object storage)**
+* 🧊 **Apache Iceberg** (REST Catalog mode)
+* 🏛 **Apache Polaris** (Catalog + Governance)
+* 🗄 **RustFS** (S3-compatible object storage)
 * 🔐 OAuth-based REST authentication
 * 🧠 Multi-catalog architecture
 
-This project demonstrates a **modern lakehouse architecture** similar to:
-
-* Databricks Unity Catalog
-* Snowflake multi-catalog governance
-* Enterprise Iceberg REST deployments
+GitHub Repository:
+👉 [https://github.com/bhaskaro/polaris-spark-s3](https://github.com/bhaskaro/polaris-spark-s3)
 
 ---
 
-# 🏗 Architecture Overview
+# 📥 Clone & Setup
 
-```
-                +-------------------+
-                |     Spark SQL     |
-                |  Spark Master     |
-                +---------+---------+
-                          |
-                +---------+----------+
-                |  Spark Workers     |
-                | (Distributed Exec) |
-                +---------+----------+
-                          |
-                +---------+----------+
-                | Iceberg REST Client|
-                +---------+----------+
-                          |
-                +---------+----------+
-                |     Polaris        |
-                | Iceberg REST API   |
-                +---------+----------+
-                          |
-                +---------+----------+
-                |      RustFS        |
-                |  S3 Object Store   |
-                +--------------------+
+## 1️⃣ Clone Repository
+
+```bash
+git clone https://github.com/bhaskaro/polaris-spark-s3.git
+cd polaris-spark-s3
 ```
 
----
-
-# 📦 Components
-
-| Component           | Purpose                      |
-| ------------------- | ---------------------------- |
-| Spark 3.5.1         | Distributed SQL Engine       |
-| Iceberg             | Table format                 |
-| Polaris             | REST Catalog + Governance    |
-| RustFS              | S3 compatible object storage |
-| AWS CLI (container) | Bucket management            |
-
----
-
-# 🐳 Docker Compose Setup
-
-## Start Everything
+## 2️⃣ Start Environment
 
 ```bash
 docker compose up -d
@@ -82,15 +44,13 @@ You should see:
 
 ---
 
-## Stop Everything
+## 🛑 Stop Environment
 
 ```bash
 docker compose down
 ```
 
----
-
-## Full Reset (⚠ Deletes Data)
+## ⚠ Full Reset (Deletes All Data)
 
 ```bash
 docker compose down -v
@@ -98,13 +58,31 @@ docker compose down -v
 
 ---
 
-# 🗄 Create S3 Bucket (RustFS)
+# 🏗 Architecture Overview
 
-Polaris requires a bucket before creating tables.
+```
+Spark Master + Workers
+        ↓
+Iceberg REST Client
+        ↓
+Polaris (REST Catalog + Governance)
+        ↓
+RustFS (S3 Object Storage)
+```
+
+---
+
+# 🗄 S3 Bucket Management (RustFS)
+
+Before using Polaris catalogs, create the bucket.
+
+---
+
+## ✅ Create Bucket
 
 ```bash
 docker run --rm -it \
-  --network polaris_lakehouse_net \
+  --network lakehouse_net \
   -e AWS_ACCESS_KEY_ID=polaris_root \
   -e AWS_SECRET_ACCESS_KEY=polaris_pass \
   -e AWS_DEFAULT_REGION=us-west-2 \
@@ -115,97 +93,37 @@ docker run --rm -it \
 
 ---
 
-# 🧊 Spark SQL – Connecting to Polaris (Single Catalog)
-
-Enter Spark container:
+## ✅ List Buckets
 
 ```bash
-docker exec -it spark-master bash
+docker run --rm -it \
+  --network lakehouse_net \
+  -e AWS_ACCESS_KEY_ID=polaris_root \
+  -e AWS_SECRET_ACCESS_KEY=polaris_pass \
+  -e AWS_DEFAULT_REGION=us-west-2 \
+  amazon/aws-cli:latest \
+  --endpoint-url http://rustfs:9000 \
+  s3 ls
 ```
 
-Start Spark SQL:
+---
+
+## ✅ Remove Bucket (Cleanup)
 
 ```bash
-/opt/spark/bin/spark-sql \
-  --master spark://spark-master:7077 \
-  --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.2,org.apache.iceberg:iceberg-aws-bundle:1.4.2 \
-  --conf spark.jars.ivy=/tmp/.ivy2 \
-  --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
-  --conf spark.sql.catalog.quick=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.quick.type=rest \
-  --conf spark.sql.catalog.quick.warehouse=quickstart_catalog \
-  --conf spark.sql.catalog.quick.uri=http://polaris:8181/api/catalog \
-  --conf spark.sql.catalog.quick.credential=root:s3cr3t \
-  --conf spark.sql.catalog.quick.scope=PRINCIPAL_ROLE:ALL \
-  --conf spark.sql.catalog.quick.s3.endpoint=http://rustfs:9000 \
-  --conf spark.sql.catalog.quick.s3.path-style-access=true \
-  --conf spark.sql.catalog.quick.s3.access-key-id=polaris_root \
-  --conf spark.sql.catalog.quick.s3.secret-access-key=polaris_pass \
-  --conf spark.sql.catalog.quick.client.region=us-west-2
+docker run --rm -it \
+  --network lakehouse_net \
+  -e AWS_ACCESS_KEY_ID=polaris_root \
+  -e AWS_SECRET_ACCESS_KEY=polaris_pass \
+  -e AWS_DEFAULT_REGION=us-west-2 \
+  amazon/aws-cli:latest \
+  --endpoint-url http://rustfs:9000 \
+  s3 rb s3://bucket123 --force
 ```
 
 ---
 
-# 📂 Spark SQL Operations
-
-## List Catalogs
-
-```sql
-SHOW CATALOGS;
-```
-
-## List Namespaces
-
-```sql
-SHOW NAMESPACES IN quick;
-```
-
-## Create Namespace
-
-```sql
-CREATE NAMESPACE quick.sales;
-```
-
-## Create Table
-
-```sql
-CREATE TABLE quick.sales.orders (
-  id INT,
-  name STRING
-);
-```
-
-## Insert Data
-
-```sql
-INSERT INTO quick.sales.orders VALUES (1, 'Vijay');
-```
-
-## Query Table
-
-```sql
-SELECT * FROM quick.sales.orders;
-```
-
----
-
-# 🕒 Time Travel
-
-List snapshots:
-
-```sql
-SELECT * FROM quick.sales.orders.snapshots;
-```
-
-Query previous version:
-
-```sql
-SELECT * FROM quick.sales.orders VERSION AS OF <snapshot_id>;
-```
-
----
-
-# 🌐 Polaris REST API Usage
+# 🔐 Polaris OAuth Token
 
 Base URL:
 
@@ -213,9 +131,7 @@ Base URL:
 http://localhost:8181
 ```
 
----
-
-## 🔐 Get OAuth Token
+### Get Token
 
 ```bash
 curl -X POST http://localhost:8181/api/catalog/v1/oauth/tokens \
@@ -225,7 +141,7 @@ curl -X POST http://localhost:8181/api/catalog/v1/oauth/tokens \
   -d 'scope=PRINCIPAL_ROLE:ALL'
 ```
 
-Export token:
+Export:
 
 ```bash
 export TOKEN="<access_token>"
@@ -233,9 +149,11 @@ export TOKEN="<access_token>"
 
 ---
 
-# 📚 Catalog Management (Management API)
+# 📚 Catalog Lifecycle (Management API)
 
-## List Catalogs
+---
+
+## 🔎 List Catalogs
 
 ```bash
 curl -X GET \
@@ -246,9 +164,7 @@ curl -X GET \
 
 ---
 
-## Create Catalog
-
-⚠ Must use non-overlapping S3 path
+## ➕ Create Catalog
 
 ```bash
 curl -X POST http://localhost:8181/api/management/v1/catalogs \
@@ -275,7 +191,7 @@ curl -X POST http://localhost:8181/api/management/v1/catalogs \
 
 ---
 
-## Delete Catalog
+## ❌ Delete Catalog
 
 ```bash
 curl -X DELETE \
@@ -286,13 +202,15 @@ curl -X DELETE \
 
 ---
 
-# 📂 Namespace Operations (REST)
+# 📂 Namespace Lifecycle (REST)
 
-## Create Namespace
+---
+
+## ➕ Create Namespace
 
 ```bash
 curl -X POST \
-  http://localhost:8181/api/catalog/v1/quickstart_catalog/namespaces \
+  http://localhost:8181/api/catalog/v1/analytics_catalog/namespaces \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -303,33 +221,35 @@ curl -X POST \
 
 ---
 
-## List Namespaces
+## 🔎 List Namespaces
 
 ```bash
 curl -X GET \
-  http://localhost:8181/api/catalog/v1/quickstart_catalog/namespaces \
+  http://localhost:8181/api/catalog/v1/analytics_catalog/namespaces \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-## Delete Namespace
+## ❌ Delete Namespace
 
 ```bash
 curl -X DELETE \
-  http://localhost:8181/api/catalog/v1/quickstart_catalog/namespaces/finance \
+  http://localhost:8181/api/catalog/v1/analytics_catalog/namespaces/finance \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-# 📊 Table Operations (REST)
+# 📊 Table Lifecycle (REST)
 
-## Create Table
+---
+
+## ➕ Create Table
 
 ```bash
 curl -X POST \
-  http://localhost:8181/api/catalog/v1/quickstart_catalog/namespaces/finance/tables \
+  http://localhost:8181/api/catalog/v1/analytics_catalog/namespaces/finance/tables \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -347,109 +267,137 @@ curl -X POST \
 
 ---
 
-## List Tables
+## 🔎 List Tables
 
 ```bash
 curl -X GET \
-  http://localhost:8181/api/catalog/v1/quickstart_catalog/namespaces/finance/tables \
+  http://localhost:8181/api/catalog/v1/analytics_catalog/namespaces/finance/tables \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-## Get Table Metadata
+## 📄 Get Table Metadata
 
 ```bash
 curl -X GET \
-  http://localhost:8181/api/catalog/v1/quickstart_catalog/namespaces/finance/tables/transactions \
+  http://localhost:8181/api/catalog/v1/analytics_catalog/namespaces/finance/tables/transactions \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-## Delete Table
+## ❌ Delete Table
 
 ```bash
 curl -X DELETE \
-  http://localhost:8181/api/catalog/v1/quickstart_catalog/namespaces/finance/tables/transactions \
+  http://localhost:8181/api/catalog/v1/analytics_catalog/namespaces/finance/tables/transactions \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-# 🧹 Cleanup Data in RustFS
+# 🧊 Spark SQL Integration
 
-Delete objects:
-
-```bash
-aws --endpoint-url http://localhost:9000 s3 rm s3://bucket123 --recursive
-```
-
-Delete bucket:
+Enter Spark:
 
 ```bash
-aws --endpoint-url http://localhost:9000 s3 rb s3://bucket123
+docker exec -it spark-master bash
+```
+
+Start Spark SQL:
+
+```bash
+/opt/spark/bin/spark-sql \
+  --master spark://spark-master:7077 \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.2,org.apache.iceberg:iceberg-aws-bundle:1.4.2 \
+  --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+  --conf spark.sql.catalog.quick=org.apache.iceberg.spark.SparkCatalog \
+  --conf spark.sql.catalog.quick.type=rest \
+  --conf spark.sql.catalog.quick.uri=http://polaris:8181/api/catalog \
+  --conf spark.sql.catalog.quick.credential=root:s3cr3t \
+  --conf spark.sql.catalog.quick.scope=PRINCIPAL_ROLE:ALL \
+  --conf spark.sql.catalog.quick.warehouse=analytics_catalog \
+  --conf spark.sql.catalog.quick.s3.endpoint=http://rustfs:9000 \
+  --conf spark.sql.catalog.quick.s3.path-style-access=true \
+  --conf spark.sql.catalog.quick.s3.access-key-id=polaris_root \
+  --conf spark.sql.catalog.quick.s3.secret-access-key=polaris_pass \
+  --conf spark.sql.catalog.quick.client.region=us-west-2
 ```
 
 ---
 
-# 🛠 Troubleshooting
+## Spark Operations
 
-### ❌ Connection Refused to localhost:9000
-
-Use container hostname:
-
+```sql
+SHOW CATALOGS;
+SHOW NAMESPACES IN quick;
+CREATE NAMESPACE quick.finance;
+SHOW TABLES IN quick.finance;
 ```
-http://rustfs:9000
+
+Create table:
+
+```sql
+CREATE TABLE quick.finance.orders (
+  id INT,
+  name STRING
+);
 ```
 
-Not `localhost`.
+Insert:
+
+```sql
+INSERT INTO quick.finance.orders VALUES (1, 'Vijay');
+```
+
+Query:
+
+```sql
+SELECT * FROM quick.finance.orders;
+```
 
 ---
 
-### ❌ Bucket Does Not Exist
+# 🕒 Iceberg Time Travel
 
-Create bucket before creating tables.
+```sql
+SELECT * FROM quick.finance.orders.snapshots;
+```
+
+```sql
+SELECT * FROM quick.finance.orders VERSION AS OF <snapshot_id>;
+```
 
 ---
 
-### ❌ Catalog Overlapping Location
+# 🧹 Full Cleanup Order (Recommended)
 
-Each catalog must use a unique base S3 prefix.
+1️⃣ Delete tables
+2️⃣ Delete namespaces
+3️⃣ Delete catalog
+4️⃣ Delete bucket
 
 ---
 
-# 🎯 What This Project Demonstrates
+# 🎯 What This Demonstrates
 
-✔ Distributed Spark Cluster
-✔ Iceberg REST Catalog
-✔ OAuth-secured REST operations
+✔ Distributed Spark cluster
+✔ Iceberg REST catalog
+✔ OAuth secured APIs
 ✔ Multi-catalog governance
-✔ S3-compatible object storage
+✔ S3 compatible storage
+✔ Full lifecycle management (Bucket → Catalog → Namespace → Table)
 ✔ Snapshot-based time travel
-✔ Full API-driven lakehouse control
 
 ---
 
 # 🚀 Next Enhancements
 
 * Add Trino engine
-* Enable RBAC in Polaris
+* Enable Polaris RBAC
 * Iceberg branching
-* CI/CD deployment
-* Terraform-based infra provisioning
-
----
-
-# 🏁 Conclusion
-
-You now have a fully working enterprise-style Iceberg REST Lakehouse using:
-
-* Spark
-* Polaris
-* RustFS
-* Docker
-
-This architecture is production-aligned and suitable for experimentation, demos, and advanced lakehouse learning.
+* Terraform provisioning
+* CI/CD integration
 
 ---
