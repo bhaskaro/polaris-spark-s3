@@ -1,5 +1,3 @@
----
-
 # 🚀 Spark + Iceberg REST + Polaris + RustFS Lakehouse
 
 A fully containerized **distributed Spark 3.5.1 cluster (Master + Workers)** integrated with:
