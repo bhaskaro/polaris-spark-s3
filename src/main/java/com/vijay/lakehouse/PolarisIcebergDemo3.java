@@ -1,15 +1,28 @@
 package com.vijay.lakehouse;
 
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+/**
+ *
+ * Author : bhask
+ * Created : 02-19-2026
+ */
 public class PolarisIcebergDemo3 {
 
     public static void main(String[] args) {
+
+        System.setProperty("aws.region", "us-west-2");
+        String DOCKER_HOST_IP = "192.168.1.222";
+
+
         // 1. Load configuration from environment variables (or use defaults)
-        String hostIp = getEnv("POLARIS_HOST", "192.168.1.222");
+        String hostIp = getEnv("POLARIS_HOST", DOCKER_HOST_IP);
         String clientId = getEnv("POLARIS_CLIENT_ID", "root");
         String clientSecret = getEnv("POLARIS_CLIENT_SECRET", "s3cr3t");
         String s3AccessKey = getEnv("S3_ACCESS_KEY", "polaris_root");
@@ -46,18 +59,45 @@ public class PolarisIcebergDemo3 {
         polarisConfigs.forEach(builder::config);
         SparkSession spark = builder.getOrCreate();
 
-        try {
-            runDemoQueries(spark);
-        } finally {
-            spark.stop();
-        }
-    }
 
-    private static void runDemoQueries(SparkSession spark) {
+        // Create Namespace
         spark.sql("CREATE NAMESPACE IF NOT EXISTS polaris.demo");
-        spark.sql("CREATE TABLE IF NOT EXISTS polaris.demo.users (id INT, name STRING, age INT) USING iceberg");
-        spark.sql("INSERT INTO polaris.demo.users VALUES (1, 'Alice', 30), (2, 'Bob', 25)");
+
+        // Create Table
+        // spark.sql("CREATE TABLE polaris.demo.users (id INT, name STRING, age INT ) USING iceberg ");
+
+        // Insert Data
+        spark.sql("INSERT INTO polaris.demo.users VALUES (1, 'Alice', 30), (2, 'Bob', 25) ");
+
+        // Query Data
         spark.sql("SELECT * FROM polaris.demo.users").show();
+
+
+        spark.sql("show catalogs").show();
+        spark.sql("SHOW NAMESPACES IN polaris").show();
+
+        spark.sql("USE polaris").show();
+        spark.sql("SHOW NAMESPACES").show();
+
+        spark.sql("SHOW TABLES IN polaris.demo").show();
+
+        // 1. Get the DataFrame
+        Dataset<Row> df = spark.sql("SELECT id, name, age FROM polaris.demo.users");
+
+        // 2. Collect the data into a Java List (This brings data to the Driver memory)
+        List<Row> rows = df.collectAsList();
+
+        // 3. Iterate
+        for (Row row : rows) {
+            int id = row.getInt(0);               // Access by index
+            String name = row.getAs("name");      // Access by column name
+            int age = row.getInt(row.fieldIndex("age"));
+
+            System.out.println("User: " + name + " (ID: " + id + ", age : " + age + ")");
+        }
+
+
+        spark.stop();
     }
 
     private static String getEnv(String key, String defaultValue) {
