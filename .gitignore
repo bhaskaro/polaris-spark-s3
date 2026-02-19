@@ -1,0 +1,25 @@
+# --- Maven ---
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# --- IntelliJ IDEA ---
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# If you prefer to keep some shared IntelliJ settings (like Project SDK),
+# you can use these "negative ignores" instead of the simple .idea/ above:
+# !.idea/misc.xml
+# !.idea/encodings.xml
+# !.idea/vcs.xml
+
+# --- Compiled Java files ---
+*.class
+
+# --- Log files ---
+*.log
