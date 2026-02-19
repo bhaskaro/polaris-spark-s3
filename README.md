@@ -1,3 +1,5 @@
+---
+
 # 🚀 Spark + Iceberg REST + Polaris + RustFS Lakehouse
 
 A fully containerized **distributed Spark 3.5.1 cluster (Master + Workers)** integrated with:
@@ -5,7 +7,7 @@ A fully containerized **distributed Spark 3.5.1 cluster (Master + Workers)** int
 * 🧊 **Apache Iceberg** (REST Catalog mode)
 * 🏛 **Apache Polaris** (Catalog + Governance)
 * 🗄 **RustFS** (S3-compatible object storage)
-* 🔐 OAuth-based REST authentication
+* 🔐 OAuth-secured REST APIs
 * 🧠 Multi-catalog architecture
 
 GitHub Repository:
@@ -74,7 +76,7 @@ RustFS (S3 Object Storage)
 
 # 🗄 S3 Bucket Management (RustFS)
 
-Before using Polaris catalogs, create the bucket.
+Before creating catalogs or tables, create a bucket.
 
 ---
 
@@ -123,7 +125,7 @@ docker run --rm -it \
 
 ---
 
-# 🔐 Polaris OAuth Token
+# 🔐 Polaris OAuth Authentication
 
 Base URL:
 
@@ -131,7 +133,7 @@ Base URL:
 http://localhost:8181
 ```
 
-### Get Token
+## Get Access Token
 
 ```bash
 curl -X POST http://localhost:8181/api/catalog/v1/oauth/tokens \
@@ -141,7 +143,7 @@ curl -X POST http://localhost:8181/api/catalog/v1/oauth/tokens \
   -d 'scope=PRINCIPAL_ROLE:ALL'
 ```
 
-Export:
+Export token:
 
 ```bash
 export TOKEN="<access_token>"
@@ -202,7 +204,7 @@ curl -X DELETE \
 
 ---
 
-# 📂 Namespace Lifecycle (REST)
+# 📂 Namespace Lifecycle
 
 ---
 
@@ -241,7 +243,7 @@ curl -X DELETE \
 
 ---
 
-# 📊 Table Lifecycle (REST)
+# 📊 Table Lifecycle
 
 ---
 
@@ -297,9 +299,42 @@ curl -X DELETE \
 
 ---
 
+# ⚠ Spark SQL Package Download Fix (Important)
+
+When using:
+
+```
+--packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.2
+```
+
+Spark downloads dependencies to:
+
+```
+/home/spark/.ivy2
+```
+
+This directory does **not exist by default**, causing failures.
+
+---
+
+## ✅ One-Time Fix
+
+Run once after containers start:
+
+```bash
+docker exec -u root -it spark-master bash -c "
+mkdir -p /home/spark/.ivy2/jars &&
+chown -R spark:spark /home/spark
+"
+```
+
+This ensures Spark can download Iceberg dependencies properly.
+
+---
+
 # 🧊 Spark SQL Integration
 
-Enter Spark:
+Enter Spark container:
 
 ```bash
 docker exec -it spark-master bash
@@ -333,27 +368,8 @@ Start Spark SQL:
 SHOW CATALOGS;
 SHOW NAMESPACES IN quick;
 CREATE NAMESPACE quick.finance;
-SHOW TABLES IN quick.finance;
-```
-
-Create table:
-
-```sql
-CREATE TABLE quick.finance.orders (
-  id INT,
-  name STRING
-);
-```
-
-Insert:
-
-```sql
+CREATE TABLE quick.finance.orders (id INT, name STRING);
 INSERT INTO quick.finance.orders VALUES (1, 'Vijay');
-```
-
-Query:
-
-```sql
 SELECT * FROM quick.finance.orders;
 ```
 
@@ -371,7 +387,7 @@ SELECT * FROM quick.finance.orders VERSION AS OF <snapshot_id>;
 
 ---
 
-# 🧹 Full Cleanup Order (Recommended)
+# 🧹 Cleanup Order (Recommended)
 
 1️⃣ Delete tables
 2️⃣ Delete namespaces
@@ -384,15 +400,15 @@ SELECT * FROM quick.finance.orders VERSION AS OF <snapshot_id>;
 
 ✔ Distributed Spark cluster
 ✔ Iceberg REST catalog
-✔ OAuth secured APIs
-✔ Multi-catalog governance
-✔ S3 compatible storage
-✔ Full lifecycle management (Bucket → Catalog → Namespace → Table)
+✔ OAuth-secured governance
+✔ Multi-catalog architecture
+✔ S3-compatible storage
+✔ Full lifecycle management
 ✔ Snapshot-based time travel
 
 ---
 
-# 🚀 Next Enhancements
+# 🚀 Future Enhancements
 
 * Add Trino engine
 * Enable Polaris RBAC
