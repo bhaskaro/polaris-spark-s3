@@ -35,6 +35,12 @@
             <version>${spark.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-spark-extensions-3.5_${scala.binary.version}</artifactId>
+            <version>1.5.0</version>
+        </dependency>
+
         <!-- ============================= -->
         <!-- Iceberg Spark Runtime -->
         <!-- ============================= -->

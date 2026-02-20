@@ -2,8 +2,11 @@ package com.vijay.lakehouse;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +53,7 @@ public class PolarisIcebergDemo3 {
         polarisConfigs.put("spark.sql.catalog.polaris.s3.secret-access-key", s3SecretKey);
         polarisConfigs.put("spark.sql.catalog.polaris.client.region", region);
         polarisConfigs.put("spark.sql.catalog.polaris.s3.region", region);
+        polarisConfigs.put("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions");
 
         // 3. Initialize Spark with the Config Map
         SparkSession.Builder builder = SparkSession.builder()
@@ -63,8 +67,27 @@ public class PolarisIcebergDemo3 {
         // Create Namespace
         spark.sql("CREATE NAMESPACE IF NOT EXISTS polaris.demo");
 
+        // 1. Drop the table if it exists
+        spark.sql("DROP TABLE IF EXISTS polaris.demo.users");
+
+        // 2. Create the table
+        spark.sql("CREATE TABLE polaris.demo.users (" +
+                "id INT, " +
+                "name STRING, " +
+                "age INT" +
+                ") USING iceberg");
+
         // Create Table
         // spark.sql("CREATE TABLE polaris.demo.users (id INT, name STRING, age INT ) USING iceberg ");
+
+        // Delete a specific user by ID
+        spark.sql("DELETE FROM polaris.demo.users WHERE id = 1");
+
+        // Delete all users older than 30
+        spark.sql("DELETE FROM polaris.demo.users WHERE age >= 30");
+
+        // truncate table
+        spark.sql("TRUNCATE TABLE polaris.demo.users");
 
         // Insert Data
         spark.sql("INSERT INTO polaris.demo.users VALUES (1, 'Alice', 30), (2, 'Bob', 25) ");
@@ -97,7 +120,38 @@ public class PolarisIcebergDemo3 {
         }
 
 
+        // 1. Prepare a List to hold your data in memory
+        List<Row> userRows = new ArrayList<>();
+
+        // 2. Loop to generate data
+        for (int i = 1; i <= 10000; i++) {
+            // Adding (id, name, age)
+            userRows.add(RowFactory.create(i, "User_" + i, 20 + (i % 50)));
+        }
+
+        // 3. Define the structure to match your table
+        // Note: Ensure the column names and types match your 'CREATE TABLE' exactly
+        StructType userSchema = new StructType()
+                .add("id", "int")
+                .add("name", "string")
+                .add("age", "int");
+
+        // 4. Convert to DataFrame and Append to the Iceberg table in ONE transaction
+        spark.createDataFrame(userRows, userSchema)
+                .write()
+                .format("iceberg")
+                .mode("append")
+                .save("polaris.demo.users");
+
+        System.out.println("Successfully bulk inserted 100 users.");
+
+        spark.sql("SELECT min(id), max(id), count(*) FROM polaris.demo.users").show();
+
+        // This is an Iceberg-specific administrative command
+        spark.sql("CALL polaris.system.expire_snapshots('demo.users')");
+
         spark.stop();
+
     }
 
     private static String getEnv(String key, String defaultValue) {
