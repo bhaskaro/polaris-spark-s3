@@ -124,7 +124,7 @@ public class PolarisIcebergDemo3 {
         List<Row> userRows = new ArrayList<>();
 
         // 2. Loop to generate data
-        for (int i = 1; i <= 10000; i++) {
+        for (int i = 1; i <= 100; i++) {
             // Adding (id, name, age)
             userRows.add(RowFactory.create(i, "User_" + i, 20 + (i % 50)));
         }
